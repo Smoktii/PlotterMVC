@@ -1,0 +1,349 @@
+﻿
+@{
+    ViewBag.Title = "Iaas Reliability";
+}
+
+<style type="text/css">
+    .input-group {
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+
+    .input-group-addon {
+        width: 112px;
+        font-weight: bold;
+    }
+
+    .table {
+        font-size: 16px;
+        text-align: center;
+    }
+
+    .table > tbody > tr{
+        height: 40px;
+    }
+    
+    th {
+        text-align: center;
+    }
+    
+    .well-sm {
+        text-align: center;
+        font-size: 16px;
+        margin-bottom: 5px;
+        padding: 2px;
+    }
+
+    .iaas-plot-container {
+        border: 1px solid black;
+    }
+
+    #PlotDiv {
+        width: 900px;
+        height: 620px;
+    }
+
+    #RefreshBtn {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+        #RefreshBtn .btn {
+            width: 100%;
+        }
+
+    * {
+        font-weight: bold;
+        font-family: Arial;
+    }
+</style>
+
+<script type='text/javascript'>
+
+    $(document).ready(setAvLevels);
+    $(document).ready(getData);
+    $(document).ready(attachEventHandlers);
+    
+    function getData() {
+        var args = {};
+        args.Tmin = $('#Tmin').val();
+        args.Tmax = $('#Tmax').val();
+        args.gamma_max = $('#gamma_max').val().replace(",", ".");
+        args.gamma_min = $('#gamma_min').val().replace(",", ".");
+        args.mu = $('#mu').val();
+
+        $.ajax({
+            url: "home/getdata",
+            dataType: "json",
+            type: "POST",
+            data: "{'args': '" + JSON.stringify(args) + "'}",
+            contentType: "application/json; charset=utf-8",
+            success: function (data) {
+                setUp(data.T, data.gamma, data.A);
+            },
+            error: function (e) {
+                console.log(e);
+            }
+        });
+    }
+
+    function setUp(T, gamma, A) {
+        var z = [];
+
+        for (var i = 0; i < T.length; i++) {
+            var row = [];
+            for (var j = 0; j < gamma.length; j++) {
+                row.push(A[j, i]);
+            }
+            z.push(row);
+        }
+
+        var text = T.map((yi, i) => gamma.map((xi, j) =>
+            "λ: " + xi + "<br>" +
+            "T: " + yi + "<br>" +
+            "A: " + z[i][j]));
+
+        var data = [{
+            z: z,
+            x: gamma,
+            y: T,
+            type: 'surface',
+            hoverinfo: 'text',
+            text: text
+        }];
+
+        var title = 'µ = ' + $('#mu').val() + ' 1/h';
+
+        var layout = {
+            autosize: false,
+            title: '<b>' + title + '</b>',
+            titlefont: {
+                family: 'Arial',
+                size: 22
+            },
+            width: 900,
+            height: 620,
+            scene: {
+                xaxis: {
+                    title: 'λ, 1/h',
+                    titlefont: {
+                        family: 'Arial',
+                        size: 20
+                    },
+                    mirror: "all",
+                    showline: true,
+                    ticklen: 4,
+                    tickfont: {
+                        family: 'Arial',
+                        size: 14
+                    },
+                    exponentformat: "none"
+                },
+                yaxis: {
+                    title: 'T, h',
+                    titlefont: {
+                        family: 'Arial',
+                        size: 20
+                    },
+                    mirror: "all",
+                    showline: true,
+                    ticklen: 4,
+                    tickfont: {
+                        family: 'Arial',
+                        size: 14
+                    }
+                },
+                zaxis: {
+                    title: 'A',
+                    titlefont: {
+                        family: 'Arial',
+                        size: 20
+                    },
+                    mirror: "all",
+                    showline: true,
+                    ticklen: 4,
+                    tickfont: {
+                        family: 'Arial',
+                        size: 14
+                    }
+                }
+            }
+        };
+
+        Plotly.newPlot('PlotDiv', data, layout);
+    }
+
+    function attachEventHandlers() {
+        $(document).dblclick(function () {
+            setTimeout(function () {
+                if ($('.hovertext').length > 0) {
+                    var tspans = $('.hovertext').find('tspan');
+
+                    var valA, valT, valGamma;
+
+                    tspans.each(function (i, el) {
+                        var elText = $(el).text();
+                        var elVal = elText.substr(3);
+
+                        if (elText.indexOf("A:") == 0) {
+                            valA = elVal.substring(0, 6);
+                        }
+                        else if (elText.indexOf("λ:") == 0) {
+                            valGamma = elVal;
+                        }
+                        else if (elText.indexOf("T:") == 0) {
+                            valT = elVal;
+                        }
+                    });
+
+                    addRow(valA, valT, valGamma);
+                }
+            }, 100);
+        });
+    }
+
+    function setAvLevels() {
+        var rows = $('.table-hover > tbody > tr');
+
+        rows.each(function (i, el) {
+            $(el).on('click', function () {
+                var wasSelected = $(el).hasClass('tr-selected');
+
+                rows.each(function (index, element) {
+                    $(element).removeClass('tr-selected');
+                });
+
+                if (!wasSelected) {
+                    $(el).addClass('tr-selected');
+                }
+            });
+        });
+    }
+
+    function addRow(valueA, valueT, valueGamma) {
+        var rows = $('.table > tbody > tr');
+
+        var tr = $('<tr/>');
+
+        var tdA = $('<td/>');
+        var tdT = $('<td/>');
+        var tdgamma = $('<td/>');
+
+        if (valueA != undefined) $(tdA).text(valueA);
+        if (valueT != undefined) $(tdT).text(valueT);
+        if (valueGamma != undefined) $(tdgamma).text(valueGamma);
+
+        tdA.click(function (e) { appendInput(e); });
+        tdT.click(function (e) { appendInput(e); });
+        tdgamma.click(function (e) { appendInput(e); });
+        
+        tdA.appendTo(tr);
+        tdgamma.appendTo(tr);
+        tdT.appendTo(tr);
+
+        tr.insertBefore(rows[rows.length - 1]);
+    }
+
+    function removeRow() {
+        var rows = $('.table > tbody > tr');
+
+        if (rows.length > 1) {
+            $(rows[rows.length - 2]).remove();
+        }
+    }
+
+    function appendInput(e) {
+        var input = $(e.target).find('input');
+
+        if (input.length == 0) {
+            input = $('<input/>');
+
+            var text = $(e.target).text();
+            input.val(text);
+
+            input.on('blur', function (e) { removeInput(e); });
+            input.width($(e.target).width() - 5);
+
+            $(e.target).empty();
+            input.appendTo(e.target);
+
+            input.focus();
+        }
+    }
+
+    function removeInput(e) {
+        var input = $(e.target);
+        var td = input.closest('td');
+
+        if (td.length > 0) {
+            var text = input.val();
+
+            input.remove();
+            $(td).text(text);
+        }
+    }
+</script>
+
+<div class="jumbotron">
+    <div class="panel panel-default">
+        <div class="panel-body">
+            <div class="row">
+                <div class="col-lg-9">
+                    <div class="iaas-plot-container">
+                        <div id="PlotDiv" class="embed-responsive"></div>
+                    </div>
+                </div>
+                <div class="col-lg-3">
+                    <div class="well well-sm">Input parameters</div>
+                    <form>
+                        <div class="input-group">
+                            <span id="Tmin_addon" class="input-group-addon">Tmin, h: </span>
+                            <input type="text" id="Tmin" class="form-control" aria-describedby="Tmin_addon" value="@ViewBag.Tmin" />
+                        </div>
+                        <div class="input-group">
+                            <span id="Tmax_addon" class="input-group-addon">Tmax, h: </span>
+                            <input type="text" id="Tmax" class="form-control" aria-describedby="Tmax_addon" value="@ViewBag.Tmax" />
+                        </div>
+                        <div class="input-group">
+                            <span id="gamma_min_addon" class="input-group-addon">λmin, 1/h: </span>
+                            <input type="text" id="gamma_min" class="form-control" aria-describedby="gamma_min_addon" value="@ViewBag.gamma_min" />
+                        </div>
+                        <div class="input-group">
+                            <span id="gamma_max_addon" class="input-group-addon">λmax, 1/h: </span>
+                            <input type="text" id="gamma_max" class="form-control" aria-describedby="gamma_max_addon" value="@ViewBag.gamma_max" />
+                        </div>
+                        <div class="input-group">
+                            <span id="mu_addon" class="input-group-addon">µ, 1/h: </span>
+                            <input type="text" id="mu" class="form-control" aria-describedby="mu_addon" value="@ViewBag.mu" />
+                        </div>
+                        <div id="RefreshBtn">
+                            <button type="button" class="btn btn-default" onclick="getData();">Refresh</button>
+                        </div>
+                    </form>
+                    <div class="well well-sm">Availability level</div>
+                    <table class="table table-bordered table-hover">
+                        <thead>
+                            <tr>
+                                <th>A</th>
+                                <th>λ</th>
+                                <th>T</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="3">
+                                    <button type="button" class="btn btn-default btn-sm" onclick="addRow(); return false;">
+                                        <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+                                    </button>
+                                    <button type="button" class="btn btn-default btn-sm" onclick="removeRow(); return false;">
+                                        <span class="glyphicon glyphicon-minus" aria-hidden="true"></span>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
